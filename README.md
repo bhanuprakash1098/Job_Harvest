@@ -71,7 +71,6 @@ directory of the project.
 - Windows: `resources/chromedriver.exe`
 - macOS/Linux: `resources/chromedriver`
 
----
 
 ### **6️⃣. Create `config.ini` for APIFY API Key**
 
@@ -81,6 +80,8 @@ Inside the `resources/` directory, create a new file named `config.ini` with the
 [DEFAULT]
 APIFY_API_KEY = your_apify_api_key
 ```
+
+---
 
 ## ▶️ Running the Application
 
