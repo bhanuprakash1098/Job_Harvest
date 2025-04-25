@@ -7,11 +7,18 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
+# Load your OpenAI API key from environment variables
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 
 def evaluate_job_matches(jobs_df, resume_text):
-    # Split resume into chunks
+    """
+        Evaluates how well a given resume matches each job listing in a DataFrame using OpenAI embeddings and GPT-4o.
+        Returns a new DataFrame with match percentage, skill gaps, and resume tailoring suggestions.
+        """
+    # -------------------------------
+    # STEP 1: Split the resume into overlapping text chunks for better vector representation
+    # -------------------------------
     text_splitter = CharacterTextSplitter(
         separator="\n",
         chunk_size=1500,
@@ -20,18 +27,25 @@ def evaluate_job_matches(jobs_df, resume_text):
     )
     resume_chunks = text_splitter.split_text(resume_text)
 
-    # Create FAISS vector database from resume chunks
+    # -------------------------------
+    # STEP 2: Embed the resume chunks into a FAISS vector store using OpenAI embeddings
+    # -------------------------------
     embeddings = OpenAIEmbeddings(api_key=openai_api_key)
     docsearch = FAISS.from_texts(resume_chunks, embeddings)
 
-    # Set up LLM and chain (use ChatOpenAI for GPT-4 models)
+    # -------------------------------
+    # STEP 3: Load the LLM (ChatOpenAI using GPT-4o) and QA chain
+    # -------------------------------
     llm = ChatOpenAI(model="gpt-4o", api_key=openai_api_key)
     chain = load_qa_chain(llm, chain_type="stuff")
 
     results = []
 
-    # Iterate over each job description
+    # -------------------------------
+    # STEP 4: Iterate over each job listing in the DataFrame
+    # -------------------------------
     for _, row in jobs_df.iterrows():
+        # Create a textual context using job metadata and description
         job_context = (
             f"Platform: {row['Platform']}\n"
             f"Job Title: {row['Job Title']}\n"
@@ -41,10 +55,14 @@ def evaluate_job_matches(jobs_df, resume_text):
             f"Job URL: {row['Job URL']}\n"
         )
 
-        # Perform similarity search on resume chunks
+        # -------------------------------
+        # STEP 5: Perform vector similarity search against the resume chunks
+        # -------------------------------
         docs = docsearch.similarity_search(job_context)
 
-        # Use LLM to evaluate match percentage, missing skills, and suggestions
+        # -------------------------------
+        # STEP 6: Ask the LLM to evaluate the match between resume and job
+        # -------------------------------
         prompt_query = (
             "Evaluate the relevance of the provided resume (in chunks) to the following job description.\n\n"
             "Return the following outputs strictly in this order:\n"
@@ -59,7 +77,9 @@ def evaluate_job_matches(jobs_df, resume_text):
             "question": prompt_query
         })
 
-        # Extract response text
+        # -------------------------------
+        # STEP 7: Extract structured data (match %, skill gaps, suggestions) from LLM output
+        # -------------------------------
         response_text = response["output_text"].strip()
 
         # Use regex to extract structured data from LLM response
@@ -71,7 +91,7 @@ def evaluate_job_matches(jobs_df, resume_text):
         missing_skills = skills.group(1).strip() if skills else "Could not extract skills"
         tailoring_suggestions = suggestions.group(1).strip() if suggestions else "Could not extract suggestions"
 
-        # Collect result
+        # Store results for each job
         results.append({
             "Platform": row["Platform"],
             "Job Title": row["Job Title"],
@@ -84,6 +104,8 @@ def evaluate_job_matches(jobs_df, resume_text):
             "Resume Tailoring Suggestions": tailoring_suggestions
         })
 
-    # Convert results to DataFrame
+    # -------------------------------
+    # STEP 8: Convert all evaluation results into a DataFrame
+    # -------------------------------
     match_df = pd.DataFrame(results)
     return match_df

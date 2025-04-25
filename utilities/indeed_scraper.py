@@ -6,7 +6,11 @@ import pandas as pd
 from apify_client import ApifyClient
 
 
-# Function to clean job descriptions
+# --------------------------------------------
+# Function to clean job descriptions:
+# - Removes HTML tags
+# - Collapses multiple spaces and newlines
+# --------------------------------------------
 def clean_job_description(text):
     # Remove HTML tags
     text = re.sub(r"<.*?>", " ", text)
@@ -15,19 +19,32 @@ def clean_job_description(text):
     return text
 
 
+# --------------------------------------------
+# Main function to scrape jobs from Indeed via Apify
+# Parameters:
+# - job_title: Title of the job to search
+# - location: City or region
+# - num_jobs: Max number of jobs to scrape
+# - remote_option: Whether to include remote jobs
+# - date_posted: Filter based on date
+# - job_type: Full-time, Part-time, etc.
+# --------------------------------------------
 def scrape_indeed(job_title, location, num_jobs, remote_option, date_posted, job_type):
-    # Initialize ConfigParser
+    # --------------------------------------------
+    # STEP 1: Load API Key from config.ini
+    # --------------------------------------------
     config = configparser.ConfigParser()
-
     config_file_path = os.path.abspath("Resources/config.ini")
-
-    # Read the config.ini file
     config.read(config_file_path)
-
-    # Initialize the ApifyClient with your API token
     apify_api_key = config["DEFAULT"]["APIFY_API_KEY"]
+    # --------------------------------------------
+    # STEP 2: Initialize Apify client with API key
+    # --------------------------------------------
     client = ApifyClient(apify_api_key)
 
+    # --------------------------------------------
+    # STEP 3: Define input mappings for API filters
+    # --------------------------------------------
     job_type_mapping = {
         "Full-time": "fulltime",
         "Part-time": "parttime",
@@ -42,6 +59,10 @@ def scrape_indeed(job_title, location, num_jobs, remote_option, date_posted, job
         "Past month": "72h",
     }
 
+    # --------------------------------------------
+    # STEP 4: Prepare input for Apify actor run
+    # - Uses "canadesk/indeed-linkedin" actor
+    # --------------------------------------------
     # Prepare the Actor input
     run_input = {
         "city": location,
@@ -58,13 +79,20 @@ def scrape_indeed(job_title, location, num_jobs, remote_option, date_posted, job
         }
     }
 
-    # Run the Actor and wait for it to finish
+    # --------------------------------------------
+    # STEP 5: Run the actor and fetch results
+    # --------------------------------------------
     run = client.actor("canadesk/indeed-linkedin").call(run_input=run_input)
 
     data = [item for item in client.dataset(run["defaultDatasetId"]).iterate_items()]
     df = pd.DataFrame(data)
 
-    # Selecting required columns and renaming them
+    # --------------------------------------------
+    # STEP 6: Clean and format the data
+    # - Select relevant columns
+    # - Rename them to standard format
+    # - Clean job descriptions
+    # --------------------------------------------
     jobs_data = df[['title', 'company', 'location', 'description', 'job_url']].rename(
         columns={
             'title': 'Job Title',
@@ -77,7 +105,9 @@ def scrape_indeed(job_title, location, num_jobs, remote_option, date_posted, job
 
     jobs_data['Platform'] = 'Indeed'
 
-    # Apply cleaning function to 'Job Description' column
+    # --------------------------------------------
+    # STEP 7: Return the final cleaned DataFrame
+    # --------------------------------------------
     jobs_data['Job Description'] = jobs_data['Job Description'].apply(clean_job_description)
 
     return jobs_data
